@@ -1,5 +1,7 @@
 # 📚 Week 4 Answers: GCNs & Spectral Graph Theory
 
+**Google Colab Link:** [https://colab.research.google.com/drive/1_jBsMpCZZsoz9ET7SxEiZmQXlwvUaIXR?usp=sharing]
+
 ## Q1. Normalizing the Adjacency Matrix
 
 **1. Write the adjacency matrix** $A$ **and degree matrix** $D$
