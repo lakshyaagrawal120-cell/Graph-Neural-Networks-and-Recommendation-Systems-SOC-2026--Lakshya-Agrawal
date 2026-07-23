@@ -91,6 +91,7 @@ class GraphSAGEModel(nn.Module):
         self.pred_mlp = nn.Sequential(
             nn.Linear(embedding_dim * 3, 32),
             nn.ReLU(),
+            nn.Dropout(0.2),
             nn.Linear(32, 1)
         )
         

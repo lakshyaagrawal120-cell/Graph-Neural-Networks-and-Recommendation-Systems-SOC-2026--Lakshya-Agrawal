@@ -4,6 +4,7 @@ import urllib.request
 import sqlite3
 import json
 import time
+import math
 import numpy as np
 import pandas as pd
 import torch
@@ -292,19 +293,27 @@ def train_model(epochs=15, batch_size=512, lr=0.01, embedding_dim=64):
         
         dataset_size = len(train_users)
         
+        # Train/Test Split
+        indices = torch.randperm(dataset_size)
+        split = int(0.8 * dataset_size) # 80% training, 20% testing
+        train_indices, test_indices = indices[:split], indices[split:]
+        
         # Training loop
         model.train()
         epoch_losses = []
+        final_test_rmse = 0.0
+        
         for epoch in range(epochs):
-            permutation = torch.randperm(dataset_size)
+            # Shuffle only the training indices for this epoch
+            permutation = train_indices[torch.randperm(len(train_indices))]
             epoch_loss = 0.0
             num_batches = 0
             
-            for i in range(0, dataset_size, batch_size):
-                indices = permutation[i:i + batch_size]
-                batch_users = user_tensor[indices]
-                batch_movies = movie_tensor[indices]
-                batch_ratings = rating_tensor[indices]
+            for i in range(0, len(permutation), batch_size):
+                batch_idx = permutation[i:i + batch_size]
+                batch_users = user_tensor[batch_idx]
+                batch_movies = movie_tensor[batch_idx]
+                batch_ratings = rating_tensor[batch_idx]
                 
                 optimizer.zero_grad()
                 pred, _, _ = model(
@@ -324,7 +333,24 @@ def train_model(epochs=15, batch_size=512, lr=0.01, embedding_dim=64):
                 
             mean_loss = epoch_loss / num_batches
             epoch_losses.append(mean_loss)
-            print(f"Epoch {epoch+1}/{epochs} | Loss: {mean_loss:.4f}")
+            
+            # --- NEW: Evaluation Phase ---
+            model.eval()
+            with torch.no_grad():
+                test_users = user_tensor[test_indices]
+                test_movies = movie_tensor[test_indices]
+                test_ratings = rating_tensor[test_indices]
+                
+                test_pred, _, _ = model(
+                    test_users, test_movies, movie_genres_tensor, 
+                    user_to_movie_edges, movie_to_user_edges
+                )
+                test_mse = criterion(test_pred, test_ratings).item()
+                test_rmse = math.sqrt(test_mse)
+                final_test_rmse = test_rmse # Store for final metrics logging
+            
+            print(f"Epoch {epoch+1}/{epochs} | Train Loss (MSE): {mean_loss:.4f} | Test RMSE: {test_rmse:.4f}")
+            model.train() # Set back to train mode for next epoch
             
         # Get final embeddings and save
         model.eval()
@@ -354,8 +380,11 @@ def train_model(epochs=15, batch_size=512, lr=0.01, embedding_dim=64):
         # Record training metrics
         metrics = {
             "final_epoch_loss": float(epoch_losses[-1]),
+            "final_test_rmse": float(final_test_rmse),
             "num_epochs": epochs,
             "total_ratings": len(ratings_rows),
+            "train_size": len(train_indices),
+            "test_size": len(test_indices),
             "num_users": len(user_to_idx),
             "num_movies": len(movie_to_idx),
             "device": str(device)
@@ -500,4 +529,4 @@ def calculate_user_outliers():
 
 if __name__ == "__main__":
     init_db()
-    train_model(epochs=5)
+    train_model(epochs=10)
